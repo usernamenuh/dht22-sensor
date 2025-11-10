@@ -11,12 +11,29 @@ const char* password = "050511ko";
 #define DHTPIN D4
 #define DHTTYPE DHT22
 
+// Pin LED dan buzzer
+#define LED_HIJAU D3
+#define LED_MERAH D2
+#define BUZZER D5
+
+float thresholdTemp = 30.0; // nilai default
+
 DHT_Unified dht(DHTPIN, DHTTYPE);
 uint32_t delayMS;
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Setup pin output
+  pinMode(LED_HIJAU, OUTPUT);
+  pinMode(LED_MERAH, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+
+  // Matikan semua di awal
+  digitalWrite(LED_HIJAU, LOW);
+  digitalWrite(LED_MERAH, LOW);
+  digitalWrite(BUZZER, LOW);
 
   // Koneksi ke WiFi
   Serial.println();
@@ -26,7 +43,7 @@ void setup() {
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(300);
     Serial.print(".");
   }
 
@@ -47,7 +64,7 @@ void setup() {
 }
 
 void loop() {
-  // Delay antar pengukuran
+  getThresholdFromServer();
   delay(delayMS);
 
   sensors_event_t event;
@@ -74,7 +91,25 @@ void loop() {
   Serial.print(humidity);
   Serial.println(" %");
 
-  // Kirim data ke server Laravel
+  // === Kontrol LED & Buzzer ===
+  if (temperature < thresholdTemp) {
+    // Suhu di bawah 30°C → LED hijau berkedip, LED merah & buzzer mati
+    digitalWrite(LED_MERAH, LOW);
+    digitalWrite(BUZZER, LOW);
+
+    digitalWrite(LED_HIJAU, HIGH);
+    delay(1000); // nyala 1 detik
+    digitalWrite(LED_HIJAU, LOW);
+    delay(1000); // mati 1 detik
+
+  } else {
+    // Suhu 30°C atau lebih → LED merah & buzzer nyala, LED hijau mati
+    digitalWrite(LED_HIJAU, LOW);
+    digitalWrite(LED_MERAH, HIGH);
+    digitalWrite(BUZZER, HIGH);
+  }
+
+  // === Kirim data ke server Laravel ===
   if (WiFi.status() == WL_CONNECTED) {
     WiFiClient client;
     HTTPClient http;
@@ -103,5 +138,35 @@ void loop() {
     WiFi.reconnect();
   }
 
-  delay(3000);
+  delay(2000); // jeda kecil sebelum loop berikutnya
 }
+
+
+
+void getThresholdFromServer() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, "http://192.168.100.13:8000/get-setting");
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      String payload = http.getString();
+      Serial.println("Data setting dari server:");
+      Serial.println(payload);
+
+      int pos = payload.indexOf("threshold_temp");
+      if (pos != -1) {
+        int colon = payload.indexOf(":", pos);
+        int end = payload.indexOf("}", colon);
+        String valueStr = payload.substring(colon + 1, end);
+        thresholdTemp = valueStr.toFloat();
+      }
+    } else {
+      Serial.printf("Gagal ambil setting: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+  }
+}
+
