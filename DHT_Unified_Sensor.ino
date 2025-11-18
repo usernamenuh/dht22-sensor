@@ -20,18 +20,9 @@ const char* password = "050511ko";
 #define LEDRED2 D5
 #define DHTTYPE DHT22
 
-<<<<<<< HEAD
 float thresholdTemp = 30.0;
 String BASE_URL = "http://192.168.100.13:8000";
 int pinLampu[6] = {D6, D1, D2, D3, D8, D5};
-=======
-// Pin LED dan buzzer
-#define LED_HIJAU D3
-#define LED_MERAH D2
-#define BUZZER D5
-
-float thresholdTemp = 30.0; // nilai default
->>>>>>> 2c57767603ccef5007a9bce5ced53d8c2dddda1c
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 uint32_t delayMS;
@@ -41,7 +32,6 @@ void setup() {
   delay(1000);
 
   // Setup pin output
-<<<<<<< HEAD
   pinMode(LEDYELLOW, OUTPUT);
   pinMode(LEDRED, OUTPUT);
   pinMode(LEDGREEN, OUTPUT);
@@ -56,15 +46,6 @@ void setup() {
   digitalWrite(LEDWHITE, LOW);
   digitalWrite(LEDYELLOW2, LOW);
   digitalWrite(LEDRED2, LOW);
-=======
-  pinMode(LED_HIJAU, OUTPUT);
-  pinMode(LED_MERAH, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
-
-  // Matikan semua di awal
-  digitalWrite(LED_HIJAU, LOW);
-  digitalWrite(LED_MERAH, LOW);
->>>>>>> 2c57767603ccef5007a9bce5ced53d8c2dddda1c
   digitalWrite(BUZZER, LOW);
 
   // Koneksi ke WiFi
@@ -98,10 +79,7 @@ void setup() {
 
 void loop() {
   getThresholdFromServer();
-<<<<<<< HEAD
   lampu();
-=======
->>>>>>> 2c57767603ccef5007a9bce5ced53d8c2dddda1c
   delay(delayMS);
 
   sensors_event_t event;
@@ -130,21 +108,14 @@ void loop() {
 
   // === Kontrol LED & Buzzer ===
   if (temperature < thresholdTemp) {
-<<<<<<< HEAD
     Serial.println("Suhu di bawah threshold.");
     digitalWrite(BUZZER, LOW);
     // Suhu di bawah 30°C → LED hijau berkedip, LED merah & buzzer mati
     /* digitalWrite(LED_MERAH, LOW);
-=======
-    // Suhu di bawah 30°C → LED hijau berkedip, LED merah & buzzer mati
-    digitalWrite(LED_MERAH, LOW);
-    digitalWrite(BUZZER, LOW);
->>>>>>> 2c57767603ccef5007a9bce5ced53d8c2dddda1c
 
     digitalWrite(LED_HIJAU, HIGH);
     delay(1000); // nyala 1 detik
     digitalWrite(LED_HIJAU, LOW);
-<<<<<<< HEAD
     delay(1000); // mati 1 detik */
 
   } else {
@@ -153,15 +124,6 @@ void loop() {
     // Suhu 30°C atau lebih → LED merah & buzzer nyala, LED hijau mati
     /* digitalWrite(LED_HIJAU, LOW);
     digitalWrite(LED_MERAH, HIGH); */
-=======
-    delay(1000); // mati 1 detik
-
-  } else {
-    // Suhu 30°C atau lebih → LED merah & buzzer nyala, LED hijau mati
-    digitalWrite(LED_HIJAU, LOW);
-    digitalWrite(LED_MERAH, HIGH);
-    digitalWrite(BUZZER, HIGH);
->>>>>>> 2c57767603ccef5007a9bce5ced53d8c2dddda1c
   }
 
   // === Kirim data ke server Laravel ===
@@ -195,7 +157,6 @@ void loop() {
   }
 
   delay(2000); // jeda kecil sebelum loop berikutnya
-<<<<<<< HEAD
 }
 
 
@@ -267,37 +228,6 @@ void lampu() {
       
     } else {
       Serial.printf("Gagal ambil LAMPU: %s\n", http.errorToString(httpCode).c_str());
-    }
-
-    http.end();
-  }
-=======
->>>>>>> 2c57767603ccef5007a9bce5ced53d8c2dddda1c
-}
-
-
-
-void getThresholdFromServer() {
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFiClient client;
-    HTTPClient http;
-    http.begin(client, "http://192.168.100.13:8000/get-setting");
-    int httpCode = http.GET();
-
-    if (httpCode > 0) {
-      String payload = http.getString();
-      Serial.println("Data setting dari server:");
-      Serial.println(payload);
-
-      int pos = payload.indexOf("threshold_temp");
-      if (pos != -1) {
-        int colon = payload.indexOf(":", pos);
-        int end = payload.indexOf("}", colon);
-        String valueStr = payload.substring(colon + 1, end);
-        thresholdTemp = valueStr.toFloat();
-      }
-    } else {
-      Serial.printf("Gagal ambil setting: %s\n", http.errorToString(httpCode).c_str());
     }
 
     http.end();
