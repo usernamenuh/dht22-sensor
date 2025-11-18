@@ -1,4 +1,6 @@
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ArduinoJson.h>
 #include <ESP8266HTTPClient.h>
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
@@ -9,7 +11,18 @@ const char* ssid = "BAYU-MADESA";
 const char* password = "050511ko";
 
 #define DHTPIN D4
+#define BUZZER D7
+#define LEDYELLOW D6
+#define LEDRED D1
+#define LEDGREEN D2
+#define LEDWHITE D3
+#define LEDYELLOW2 D8
+#define LEDRED2 D5
 #define DHTTYPE DHT22
+
+float thresholdTemp = 30.0;
+String BASE_URL = "http://192.168.100.13:8000";
+int pinLampu[6] = {D6, D1, D2, D3, D8, D5};
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 uint32_t delayMS;
@@ -17,6 +30,23 @@ uint32_t delayMS;
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Setup pin output
+  pinMode(LEDYELLOW, OUTPUT);
+  pinMode(LEDRED, OUTPUT);
+  pinMode(LEDGREEN, OUTPUT);
+  pinMode(LEDWHITE, OUTPUT);
+  pinMode(LEDYELLOW2, OUTPUT);
+  pinMode(LEDRED2, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+
+  digitalWrite(LEDYELLOW, LOW);
+  digitalWrite(LEDRED, LOW);
+  digitalWrite(LEDGREEN, LOW);
+  digitalWrite(LEDWHITE, LOW);
+  digitalWrite(LEDYELLOW2, LOW);
+  digitalWrite(LEDRED2, LOW);
+  digitalWrite(BUZZER, LOW);
 
   // Koneksi ke WiFi
   Serial.println();
@@ -26,9 +56,8 @@ void setup() {
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(300);
     Serial.print(".");
-  }
 
   Serial.println();
   Serial.println("WiFi terkoneksi!");
@@ -44,10 +73,13 @@ void setup() {
   dht.temperature().getSensor(&sensor);
   dht.humidity().getSensor(&sensor);
   delayMS = sensor.min_delay / 1000;
+  }
+  
 }
 
 void loop() {
-  // Delay antar pengukuran
+  getThresholdFromServer();
+  lampu();
   delay(delayMS);
 
   sensors_event_t event;
@@ -74,12 +106,33 @@ void loop() {
   Serial.print(humidity);
   Serial.println(" %");
 
-  // Kirim data ke server Laravel
+  // === Kontrol LED & Buzzer ===
+  if (temperature < thresholdTemp) {
+    Serial.println("Suhu di bawah threshold.");
+    digitalWrite(BUZZER, LOW);
+    // Suhu di bawah 30°C → LED hijau berkedip, LED merah & buzzer mati
+    /* digitalWrite(LED_MERAH, LOW);
+
+    digitalWrite(LED_HIJAU, HIGH);
+    delay(1000); // nyala 1 detik
+    digitalWrite(LED_HIJAU, LOW);
+    delay(1000); // mati 1 detik */
+
+  } else {
+    Serial.println("Suhu di atas atau sama dengan threshold.");
+    digitalWrite(BUZZER, HIGH); 
+    // Suhu 30°C atau lebih → LED merah & buzzer nyala, LED hijau mati
+    /* digitalWrite(LED_HIJAU, LOW);
+    digitalWrite(LED_MERAH, HIGH); */
+  }
+
+  // === Kirim data ke server Laravel ===
   if (WiFi.status() == WL_CONNECTED) {
     WiFiClient client;
     HTTPClient http;
 
-    String url = "http://192.168.100.13:8000/update-data/";
+    String url = BASE_URL + "/update-data/";
+
     url += String(temperature, 1) + "/" + String(humidity, 1);
 
     Serial.print("Mengirim data ke: ");
@@ -103,5 +156,80 @@ void loop() {
     WiFi.reconnect();
   }
 
-  delay(3000);
+  delay(2000); // jeda kecil sebelum loop berikutnya
+}
+
+
+
+void getThresholdFromServer() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, BASE_URL + "/get-setting");
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      String payload = http.getString();
+      Serial.println("Data setting dari server:");
+      Serial.println(payload);
+
+      int pos = payload.indexOf("threshold_temp");
+      if (pos != -1) {
+        int colon = payload.indexOf(":", pos);
+        int end = payload.indexOf("}", colon);
+        String valueStr = payload.substring(colon + 1, end);
+        thresholdTemp = valueStr.toFloat();
+      }
+    } else {
+      Serial.printf("Gagal ambil setting: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+}
+}
+
+void lampu() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, BASE_URL + "/get-lampu");
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      String payload = http.getString();
+      Serial.println("Data LAMPUU dari server:");
+      Serial.println(payload);
+      StaticJsonDocument<700> doc;
+      DeserializationError error = deserializeJson(doc, payload);
+
+      if (!error){
+        for (int i = 0; i < doc.size(); i++) {
+          int id = doc[i]["id"];
+          String name = doc[i]["name"].as<String>();
+          int status = doc[i]["status"];
+          
+          // ubah lampu 1->index 0
+          int index = id - 1;
+
+          int pinLampu[6] = {D6, D1, D2, D3, D8, D5};
+
+          // kontrol LED 
+          if (index >= 0 && index < 6) {
+            digitalWrite(pinLampu[index], status);
+
+            Serial.print("name : ");
+            Serial.print(name);
+            Serial.print(" = ");
+            
+            Serial.println(status);
+          }
+        }
+      }
+      
+    } else {
+      Serial.printf("Gagal ambil LAMPU: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+  }
 }
